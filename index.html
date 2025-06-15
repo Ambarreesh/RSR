@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSR</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .logo {
+      width: 600px;
+      height: 500px;
+      padding: 2px;
+      margin-top: 100px;
+    }
+    input {
+      height: 30px;
+      width: 150px;
+      border: solid black;
+      border-radius: 20px;
+      font-size: 20px;
+    }
+    .st {
+      width: 100px;
+      height: 50px;
+      border-radius: 20px;
+      background-color: rgb(46, 225, 46);
+      color: black;
+      font-size: 25px;
+    }
+  </style>
+</head>
+<body style="background-color: #fffdff;">
+  <center>
+    <img src="img/r.png" class="logo">
+    <table>
+      <tr>
+        <td><h2>UserName : </h2></td>
+        <td><input id="ur" type="text" placeholder="Enter UserName"></td>
+      </tr>
+      <tr>
+        <td><h2>Password : </h2></td>
+        <td><input id="pas" type="password" placeholder="Enter Password"></td>
+      </tr>
+    </table>
+    <button class="st" onclick="login()">Login</button>
+    <br>
+  </center>
+
+  <script>
+    function login() {
+      var ur = document.getElementById("ur").value;
+      var pas = document.getElementById("pas").value;
+
+      if (ur === "Rajprabu" && pas === "admin1978") {
+        window.location.href = "rsr.html";
+      } else {
+        alert("Please enter valid username and password");
+      }
+    }
+  </script>
+</body>
+</html>
