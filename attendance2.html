@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RSR Attendance</title>
+
+  <!-- ✅ Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <!-- ✅ Firebase v8 SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+  body {
+    background-color: #fffdff;
+    font-family: sans-serif;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+  }
+
+  td, th {
+    border: 1px solid #000;
+    padding: 8px;
+    text-align: center;
+  }
+
+  input[type="text"], input[type="number"] {
+    width: 100px;
+  }
+
+  /* 👇 Add these specific column width styles */
+  th:nth-child(2), td:nth-child(2) input { width: 180px; } /* Name */
+  th:nth-child(3), td:nth-child(3) input { width: 80px; }  /* Age */
+  th:nth-child(4), td:nth-child(4) input { width: 140px; } /* Work */
+
+  .total-row {
+    font-weight: bold;
+    background-color: #eee;
+  }
+
+  #loadingPopup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #000;
+    color: #fff;
+    padding: 20px 30px;
+    border-radius: 10px;
+    font-size: 18px;
+    z-index: 9999;
+    display: none;
+  }
+</style>
+</head>
+<body class="p-3">
+
+  <div class="container-lg">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <h2 class="m-0">Attendance Register</h2>
+      <button class="btn btn-outline-secondary" onclick="window.print()">🖨️ Print</button>
+    </div>
+
+    <hr>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">From:</label>
+        <input type="date" id="fromDate" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold">To:</label>
+        <input type="date" id="toDate" class="form-control">
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button class="btn btn-primary w-100" onclick="generateTable()">Generate Table</button>
+      </div>
+    </div>
+
+    <div class="table-responsive border rounded">
+      <table class="table table-bordered table-sm align-middle mb-0" id="attendanceTable">
+        <thead class="table-light" id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot class="table-secondary" id="tableFoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-4 flex-wrap">
+      <button class="btn btn-success" onclick="addRow()">➕ Add Row</button>
+      <button class="btn btn-warning" onclick="saveData()">💾 Save Data</button>
+    </div>
+
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loadingPopup">Saving to Firebase…</div>
+
+  <script>
+    /* ---------- Firebase config & init ---------- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOwOOgRUJJyfN30GDIAWjnMqPb6AyNsvc",
+      authDomain: "rsr2-290e1.firebaseapp.com",
+      databaseURL: "https://rsr2-290e1-default-rtdb.firebaseio.com",
+      projectId: "rsr2-290e1",
+      storageBucket: "rsr2-290e1.appspot.com",
+      messagingSenderId: "653053726433",
+      appId: "1:653053726433:web:641780c41462b3c528b1a0",
+      measurementId: "G-PLSTR20KGK"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    /* ---------- Globals ---------- */
+    let dateCols = [];
+
+    /* ---------- Table generation ---------- */
+    function generateTable() {
+      const from = new Date(document.getElementById("fromDate").value);
+      const to   = new Date(document.getElementById("toDate").value);
+      if (isNaN(from) || isNaN(to) || from > to) {
+        return alert("Enter a valid date range");
+      }
+
+      // reset
+      dateCols = [];
+      const head = document.getElementById("tableHead");
+      const foot = document.getElementById("tableFoot");
+      const body = document.getElementById("tableBody");
+      head.innerHTML = foot.innerHTML = body.innerHTML = "";
+
+      // header
+      let headerRow = `
+        <tr>
+          <th style="min-width:70px">SL.NO</th>
+          <th>Name</th><th>Age</th><th>Work</th>
+          <th style="min-width:110px">Salary/Day&nbsp;(₹)</th>
+          <th>Address</th>`;
+      for (let d = new Date(from); d <= to; d.setDate(d.getDate()+1)) {
+        const ds = d.toISOString().split('T')[0];
+        headerRow += `<th class="text-nowrap">${ds}</th>`;
+        dateCols.push(ds);
+      }
+      headerRow += `<th>Total&nbsp;(₹)</th></tr>`;
+      head.innerHTML = headerRow;
+
+      // footer (daily totals)
+      foot.innerHTML = `
+        <tr class="fw-bold">
+          <td colspan="6" class="text-end">Total Salary per Day:</td>
+          ${dateCols.map(()=>`<td class="dailyTotal">₹0</td>`).join("")}
+          <td></td>
+        </tr>
+      `;
+
+      fetchData(); // load existing data if any
+    }
+
+    /* ---------- Row helpers ---------- */
+    function addRow(data = {}) {
+      const tbody = document.getElementById("tableBody");
+      const idx   = tbody.children.length + 1;
+      const row   = document.createElement("tr");
+      row.innerHTML = `
+        <td>${idx}</td>
+        <td><input class="form-control form-control-sm" type="text" value="${data.name||''}"></td>
+        <td><input class="form-control form-control-sm" type="number" value="${data.age||''}"></td>
+        <td><input class="form-control form-control-sm" type="text" value="${data.work||''}"></td>
+        <td><input class="form-control form-control-sm salaryInput" type="number" oninput="updateSalaries()" value="${data.salary||''}"></td>
+        <td><input class="form-control form-control-sm" type="text" value="${data.address||''}"></td>
+        ${dateCols.map((_,i)=>`
+          <td><input type="checkbox" class="form-check-input" onchange="updateSalaries()" ${data.attendance&&data.attendance[i]==='1'?'checked':''}></td>
+        `).join("")}
+        <td class="individualTotal">₹0</td>
+      `;
+      tbody.appendChild(row);
+      updateSalaries();
+    }
+
+    function updateSalaries() {
+      const rows = document.querySelectorAll("#tableBody tr");
+      const dayTotals = Array(dateCols.length).fill(0);
+
+      rows.forEach(row=>{
+        const salary = +row.querySelector(".salaryInput")?.value || 0;
+        const cbs = row.querySelectorAll("input[type='checkbox']");
+        let indivTotal = 0;
+        cbs.forEach((cb,i)=>{
+          if(cb.checked){ indivTotal += salary; dayTotals[i] += salary; }
+        });
+        row.querySelector(".individualTotal").textContent = `₹${indivTotal}`;
+      });
+
+      document.querySelectorAll(".dailyTotal").forEach((cell,i)=>{
+        cell.textContent = `₹${dayTotals[i]}`;
+      });
+    }
+
+    /* ---------- Firebase save/load ---------- */
+    function saveData() {
+      if(!dateCols.length) return alert("Generate the table first!");
+
+      document.getElementById("loadingPopup").style.display="flex";
+
+      const rows = document.querySelectorAll("#tableBody tr");
+      const payload = []; let totalWorkers=0,totalSalary=0;
+
+      rows.forEach(row=>{
+        const tds = row.querySelectorAll("td");
+        const sal = +tds[4].querySelector("input").value || 0;
+        const attendance = Array.from(tds).slice(6,6+dateCols.length)
+          .map(cell=>cell.querySelector("input[type='checkbox']")?.checked?'1':'0');
+        const presentDays = attendance.filter(v=>v==='1').length;
+        if(presentDays) totalWorkers++;
+        totalSalary += presentDays*sal;
+
+        payload.push({
+          name:tds[1].querySelector("input").value,
+          age: tds[2].querySelector("input").value,
+          work:tds[3].querySelector("input").value,
+          salary:sal.toString(),
+          address:tds[5].querySelector("input").value,
+          attendance
+        });
+      });
+
+      const key = `${dateCols[0]}_to_${dateCols.at(-1)}`;
+      db.ref(`attendance/${key}`).set({
+        dateCols, data:payload, summary:{totalWorkers,totalSalary}
+      })
+      .then(()=>alert("✅ Data saved successfully!"))
+      .catch(err=>{ console.error(err); alert("❌ Save failed."); })
+      .finally(()=>{ document.getElementById("loadingPopup").style.display="none"; });
+    }
+
+    function fetchData() {
+      if(!dateCols.length) return;
+      const key = `${dateCols[0]}_to_${dateCols.at(-1)}`;
+      db.ref(`attendance/${key}`).once("value")
+        .then(snap=>{
+          const val=snap.val();
+          if(val?.data){ val.data.forEach(addRow); }
+        })
+        .catch(err=>console.error("Fetch error:",err));
+    }
+  </script>
+</body>
+</html>
