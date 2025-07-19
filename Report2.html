@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RSR Final Daily Report</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <!-- Style -->
+  <style>
+    body {
+      background-color: #fffdff;
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    h2, h3 {
+      text-align: center;
+      margin: 30px 0 10px;
+    }
+
+    label {
+      display: block;
+      margin: 10px 0 20px;
+      font-size: 16px;
+    }
+
+    input[type="date"] {
+      font-size: 16px;
+      padding: 6px;
+      margin-left: 10px;
+    }
+
+    button {
+      float: right;
+      font-size: 14px;
+      padding: 6px 12px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px auto;
+      font-size: 15px;
+    }
+
+    td {
+      border: 1px solid #000;
+      padding: 10px;
+      vertical-align: middle;
+      text-align: left;
+    }
+
+    .signature {
+      text-align: center;
+      margin-top: 30px;
+    }
+
+    .signature img {
+      height: 80px;
+      width: 120px;
+      margin-top: 10px;
+    }
+
+    .clearfix::after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="clearfix">
+    <button onclick="window.print()">🖨️ Print</button>
+  </div>
+
+  <h2>🌴 Daily Report</h2>
+  <center>
+    <label>Select Date: <input type="date" id="reportDate" onchange="loadReport()" /></label>
+  </center>
+
+  <!-- Main Daily Summary -->
+  <h3>🌟 Daily Summary</h3>
+  <table>
+    <tr><td>No of Workers Engaged</td><td id="workersCount"></td></tr>
+    <tr><td>Total Salary</td><td id="totalSalary"></td></tr>
+    <tr><td>Raw Material Received</td><td id="rawReceived"></td></tr>
+    <tr><td>Raw Material Total Cost</td><td id="rawCost"></td></tr>
+    <tr><td>No of Coir Fibre Bale Produced</td><td id="fibreProduced"></td></tr>
+    <tr><td>No of Dust Load Produced</td><td id="dustProduced"></td></tr>
+    <tr><td>No of Coco pith Bags Consumed</td><td id="bagsConsumed"></td></tr>
+    <tr><td>Weight of Pith Production</td><td id="pithWeight"></td></tr>
+    <tr><td>Pith EC & Moisture</td><td id="pithECMoisture"></td></tr>
+    <tr><td>Coco Pith Block (5kg) Production</td><td id="pithBlocks"></td></tr>
+    <tr><td>Upto Date Coco-Pith Block Stock</td><td id="dustStock"></td></tr>
+    <tr><td>Upto Date Coir Fibre Bales Stock</td><td id="fibreStock"></td></tr>
+  </table>
+
+  <!-- Dispatch -->
+  <h3>🚚 Today's Dispatch</h3>
+  <table>
+    <tr><td>Material</td><td>Fibre</td></tr>
+    <tr><td>No of Bags</td><td id="fibreBags"></td></tr>
+    <tr><td>Weight of Weigh Bridge</td><td id="fibreWeight"></td></tr>
+    <tr><td>Total Cost</td><td id="fibreCost"></td></tr>
+    <tr><td>Material</td><td>Coco-Pith Block</td></tr>
+    <tr><td>No of Bags</td><td id="pithBags"></td></tr>
+    <tr><td>Weight of Weigh Bridge</td><td id="pithWeightDispatch"></td></tr>
+    <tr><td>Total Cost</td><td id="pithCost"></td></tr>
+  </table>
+
+  <!-- Expenses -->
+  <h3>💰 Daily Expenses</h3>
+  <table>
+    <tr><td>Today Expenses</td><td id="dailyExp"></td></tr>
+    <tr><td>Today Power Consumption</td><td id="powerKWH"></td></tr>
+    <tr><td>Power Factor</td><td id="powerFactor"></td></tr>
+  </table>
+
+  <!-- Finance -->
+  <h3>📊 Finance Summary</h3>
+  <table>
+    <tr><td>Opening</td><td id="opening"></td></tr>
+    <tr><td>Received</td><td id="received"></td></tr>
+    <tr><td>Closing</td><td id="closing"></td></tr>
+  </table>
+
+  <!-- Signature -->
+  <div style="text-align: right; margin-top: 50px;">
+  <h2 style="margin-bottom: 5px; text-align: right;">CEO Signature</h2>
+  <img src="img/Signature.jpeg" style="height: 80px; width: 120px;">
+</div>
+
+  <!-- Firebase and Report Logic -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDOwOOgRUJJyfN30GDIAWjnMqPb6AyNsvc",
+      authDomain: "rsr2-290e1.firebaseapp.com",
+      databaseURL: "https://rsr2-290e1-default-rtdb.firebaseio.com",
+      projectId: "rsr2-290e1",
+      storageBucket: "rsr2-290e1.appspot.com",
+      messagingSenderId: "653053726433",
+      appId: "1:653053726433:web:641780c41462b3c528b1a0",
+      measurementId: "G-PLSTR20KGK"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function loadReport() {
+      const date = document.getElementById("reportDate").value;
+      if (!date) return alert("Select a date first");
+      const set = (id, value) => document.getElementById(id).textContent = value || "-";
+
+      db.ref("attendance").once("value", snap => {
+        let totalWorkers = 0, totalSalary = 0;
+        snap.forEach(weekSnap => {
+          const summary = weekSnap.child("summary").val();
+          if (summary) {
+            totalWorkers += parseInt(summary.totalWorkers || 0);
+            totalSalary += parseFloat(summary.totalSalary || 0);
+          }
+        });
+        set("workersCount", totalWorkers);
+        set("totalSalary", `₹${totalSalary}`);
+      });
+
+      db.ref("coir_fibre_dust_register").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("fibreProduced", d.fibreCount);
+            set("dustProduced", d.dustLoadCount);
+          }
+        });
+      });
+
+      db.ref("coconut_husk_register").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("rawReceived", d.count);
+            set("rawCost", d.total);
+          }
+        });
+      });
+
+      db.ref("coco_pith_blocking_register").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("pithBlocks", d.blockProduction);
+            set("dustStock", d.totalStock);
+            set("pithECMoisture", `${d.ec || '-'} / ${d.moisture || '-'}`);
+          }
+        });
+      });
+
+      db.ref("coconut_husk_production").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("bagsConsumed", d.bags);
+            set("pithWeight", d.weight);
+            set("pithECMoisture", `${d.ec || '-'} / ${d.moisture || '-'}`);
+          }
+        });
+      });
+
+      db.ref("coir_yarn_production_register").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) set("fibreStock", d.stockKgs);
+        });
+      });
+
+      db.ref("dispatch_details").once("value", snap => {
+        let fibreBags = 0, fibreWeight = 0, fibreCost = 0;
+        let pithBags = 0, pithWeight = 0, pithCost = 0;
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            if (d.materialType === "Fibre") {
+              fibreBags += parseInt(d.noOfProduct || 0);
+              fibreWeight += parseFloat(d.weight || 0);
+              fibreCost += parseFloat(d.totalCost || 0);
+            } else if (d.materialType.toLowerCase().includes("pith")) {
+              pithBags += parseInt(d.noOfProduct || 0);
+              pithWeight += parseFloat(d.weight || 0);
+              pithCost += parseFloat(d.totalCost || 0);
+            }
+          }
+        });
+        set("fibreBags", fibreBags);
+        set("fibreWeight", fibreWeight);
+        set("fibreCost", `₹${fibreCost}`);
+        set("pithBags", pithBags);
+        set("pithWeightDispatch", pithWeight);
+        set("pithCost", `₹${pithCost}`);
+      });
+
+      db.ref("finance_details_register").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("dailyExp", `₹${d.expenses}`);
+            set("opening", `₹${d.opening}`);
+            set("received", `₹${d.received}`);
+            set("closing", `₹${d.closing}`);
+            set("powerKWH", d.consumption);
+            set("powerFactor", d.powerFactor);
+          }
+        });
+      });
+
+      db.ref("daily_power_consumption").once("value", snap => {
+        snap.forEach(child => {
+          const d = child.val();
+          if (d.date === date) {
+            set("powerKWH", d.consumption);
+            set("powerFactor", d.factor);
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
